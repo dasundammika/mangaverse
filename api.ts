@@ -1,115 +1,242 @@
-import { Manga } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Home, Compass, Search, Bookmark, Settings, Zap, Home as HomeIcon } from 'lucide-react';
+import { AppSettings, LibraryEntry, HistoryEntry } from './types';
+import HomePage from './pages/HomePage';
+import DiscoverPage from './pages/DiscoverPage';
+import SearchPage from './pages/SearchPage';
+import LibraryPage from './pages/LibraryPage';
+import HistoryPage from './pages/HistoryPage';
+import SettingsPage from './pages/SettingsPage';
+import MangaDetailsPage from './pages/MangaDetailsPage';
+import ReaderPage from './pages/ReaderPage';
+import { AnimatePresence, motion } from 'motion/react';
 
-const DIRECT_API_BASE = 'https://api.mangadex.org';
-const COVER_BASE_URL = 'https://uploads.mangadex.org/covers';
-const PLACEHOLDER_COVER = 'https://placehold.co/400x600/18181b/3f3f46?text=No+Cover';
+// --- Context & State ---
+interface AppContextType {
+  settings: AppSettings;
+  updateSetting: (key: keyof AppSettings, val: any) => void;
+  library: LibraryEntry[];
+  toggleLibrary: (manga: any) => void;
+  history: HistoryEntry[];
+  saveHistory: (entry: HistoryEntry) => void;
+  toast: string | null;
+  showToast: (msg: string) => void;
+}
 
-export const TAGS = {
-  'Action': '391ebde9-f03d-41b4-8745-384f3d251992',
-  'Romance': '423e2da2-3a4a-4c07-b6a3-37d40f43702a',
-  'Fantasy': 'cdc58593-87dd-415e-bbc0-2ec27bf404cc',
-  'Comedy': '4d32b451-110d-4f30-a38e-31396e9e6f6d',
-  'Drama': 'b9af3a45-3afd-4ad8-b69c-64983018c5b2',
-  'Horror': 'cdadfdc5-ad7a-42b4-9f1d-ad011333035d',
-  'Slice of Life': 'e5301a23-ebd9-49dd-a0cb-2abb94451293',
-  'Isekai': 'ace04321-c630-455b-b789-64c4448f9790',
-  'Full Color': 'f153c506-9c44-4761-8b71-2bd2f0ad4a9a',
-  'Long Strip': '3e130c41-8f27-4660-8348-f43c573356e4',
-  'Web Comic': 'e197df38-d0e7-43b5-9b09-2842d0c326dd',
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (!context) throw new Error('useAppContext must be used within AppProvider');
+  return context;
 };
 
-export const EXCLUDED_TAGS = ['d8a9547b-9159-48d4-92f0-9d0c357042a8', 'ddefd648-5140-4e5f-ba18-4eca4071d19b'];
-
-const cache = new Map<string, any>();
-
-export async function apiFetch(endpoint: string, params: any = {}) {
-  const PROXY_API_BASE = localStorage.getItem('mangaverse_proxy') || '';
-  
-  const globalParams: any = { ...params };
-  
-  if (endpoint.includes('/manga') || endpoint.includes('/feed')) {
-    if (!globalParams['contentRating[]']) {
-      globalParams['contentRating[]'] = ['safe', 'suggestive', 'erotica', 'pornographic'];
+const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    // Changed to v4 to force reset old cached settings
+    const saved = localStorage.getItem('mangaverse_settings_v4');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse settings', e);
+      }
     }
-    if (!globalParams['translatedLanguage[]'] && !globalParams['translatedLanguage']) {
-      globalParams['translatedLanguage[]'] = ['en'];
-    }
-  }
-
-  const cacheKey = endpoint + JSON.stringify(globalParams) + PROXY_API_BASE;
-  if (cache.has(cacheKey)) return cache.get(cacheKey);
-
-  const targetUrl = new URL(endpoint.startsWith('http') ? endpoint : `${DIRECT_API_BASE}${endpoint}`);
-  Object.entries(globalParams).forEach(([key, val]) => {
-    if (Array.isArray(val)) val.forEach(v => targetUrl.searchParams.append(key, v));
-    else if (val !== null && val !== undefined) targetUrl.searchParams.set(key, val as string);
+    return {
+      language: 'en',
+      dataSaver: false,
+      readerBg: 'black',
+      readerWidth: 'standard',
+      matureMode: true, // Force Enabled
+      ageVerified: true, // Force Verified
+    };
   });
 
-  let finalUrl = targetUrl.toString();
-  if (PROXY_API_BASE) {
-    if (PROXY_API_BASE.includes('?')) {
-      finalUrl = `${PROXY_API_BASE}${encodeURIComponent(targetUrl.toString())}`;
+  const [library, setLibrary] = useState<LibraryEntry[]>(() => {
+    const saved = localStorage.getItem('mangaverse_library');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [history, setHistory] = useState<HistoryEntry[]>(() => {
+    const saved = localStorage.getItem('mangaverse_history');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('mangaverse_settings_v4', JSON.stringify(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem('mangaverse_library', JSON.stringify(library));
+  }, [library]);
+
+  useEffect(() => {
+    localStorage.setItem('mangaverse_history', JSON.stringify(history));
+  }, [history]);
+
+  const updateSetting = (key: keyof AppSettings, val: any) => {
+    setSettings(prev => ({ ...prev, [key]: val }));
+  };
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const toggleLibrary = (manga: any) => {
+    const exists = library.some(m => m.id === manga.id);
+    if (exists) {
+      setLibrary(prev => prev.filter(m => m.id !== manga.id));
+      showToast('Removed from Library');
     } else {
-      finalUrl = `${PROXY_API_BASE.replace(/\/$/, '')}/${targetUrl.toString().replace(/^https?:\/\//, '')}`;
+      setLibrary(prev => [...prev, {
+        id: manga.id,
+        title: manga.title,
+        cover: manga.cover,
+        addedAt: Date.now()
+      }]);
+      showToast('Added to Library');
     }
-  }
+  };
 
-  try {
-    const response = await fetch(finalUrl);
-    if (!response.ok) {
-      if (response.status === 429) throw new Error("Too many requests (Rate Limited).");
-      throw new Error(`API Error: ${response.status}`);
-    }
-    const data = await response.json();
-    cache.set(cacheKey, data);
-    return data;
-  } catch (err: any) {
-    console.error("API Error: ", err);
-    throw err;
-  }
-}
+  const saveHistory = (entry: HistoryEntry) => {
+    setHistory(prev => {
+      const filtered = prev.filter(h => h.mangaId !== entry.mangaId);
+      const newHistory = [entry, ...filtered].slice(0, 50);
+      return newHistory;
+    });
+  };
 
-export function getBestTitle(manga: Manga, prefLang: string = 'en') {
-  if (!manga?.attributes?.title) return 'Untitled Manga';
-  const titleObj = manga.attributes.title;
-  const altTitles = manga.attributes.altTitles || [];
+  return (
+    <AppContext.Provider value={{ settings, updateSetting, library, toggleLibrary, history, saveHistory, toast, showToast }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+// --- Layout Components ---
+const Sidebar = () => {
+  const location = useLocation();
   
-  if (titleObj[prefLang]) return titleObj[prefLang];
-  if (titleObj.en) return titleObj.en;
+  const NavLink = ({ to, icon: Icon, id }: { to: string; icon: any; id: string }) => (
+    <Link 
+      to={to} 
+      className={`p-3 rounded-2xl transition-all duration-300 flex items-center justify-center hover:bg-zinc-900 group ${location.pathname === to ? 'bg-primary/20 text-primary' : 'text-zinc-500 hover:text-white'}`}
+    >
+      <Icon className={`w-6 h-6 ${location.pathname === to ? 'fill-current' : ''} group-hover:scale-110 transition-transform`} />
+    </Link>
+  );
+
+  return (
+    <nav className="hidden lg:flex fixed left-0 top-0 bottom-0 w-24 flex-col items-center py-8 bg-zinc-950 border-r border-zinc-800/50 z-50">
+      <Link to="/" className="mb-12 group">
+        <div className="w-12 h-12 bg-gradient-to-br from-primary to-secondary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20 group-hover:scale-110 transition-all duration-300">
+          <Zap className="w-7 h-7 fill-current" />
+        </div>
+      </Link>
+      <div className="flex flex-col gap-6 flex-1">
+        <NavLink to="/" icon={HomeIcon} id="home" />
+        <NavLink to="/discover" icon={Compass} id="discover" />
+        <NavLink to="/search" icon={Search} id="search" />
+        <NavLink to="/library" icon={Bookmark} id="library" />
+      </div>
+      <NavLink to="/settings" icon={Settings} id="settings" />
+    </nav>
+  );
+};
+
+const MobileNav = () => {
+  const location = useLocation();
   
-  for (const alt of altTitles) {
-    if (alt[prefLang]) return alt[prefLang];
-    if (alt.en) return alt.en;
-  }
-  
-  return Object.values(titleObj)[0] || 'Untitled Manga';
-}
+  const NavLink = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => (
+    <Link 
+      to={to} 
+      className={`flex flex-col items-center gap-1 p-2 transition-colors ${location.pathname === to ? 'text-primary' : 'text-zinc-500'}`}
+    >
+      <Icon className={`w-6 h-6 ${location.pathname === to ? 'fill-current' : ''}`} />
+      <span className="text-[9px] font-bold uppercase tracking-widest">{label}</span>
+    </Link>
+  );
 
-export function getDescription(manga: Manga, prefLang: string = 'en') {
-  const desc = manga?.attributes?.description;
-  if (!desc || Array.isArray(desc) || Object.keys(desc).length === 0) return "No description available.";
-  const text = desc[prefLang] || desc.en || Object.values(desc)[0] || "No description available.";
-  if (typeof text !== 'string') return "No description available.";
-  return text.replace(/\[\/?\w+\]/g, '').trim();
-}
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/90 header-blur border-t border-zinc-800/50 px-2 py-2 flex items-center justify-around shadow-2xl">
+      <NavLink to="/" icon={HomeIcon} label="Home" />
+      <NavLink to="/discover" icon={Compass} label="Find" />
+      <NavLink to="/search" icon={Search} label="Search" />
+      <NavLink to="/library" icon={Bookmark} label="Box" />
+    </nav>
+  );
+};
 
-export function getCoverUrl(manga: Manga, size: number | 'original' = 512) {
-  const coverRel = manga?.relationships?.find(r => r.type === 'cover_art');
-  if (!coverRel || !coverRel.attributes) return PLACEHOLDER_COVER;
-  const fileName = coverRel.attributes.fileName;
-  if (size === 'original') return `${COVER_BASE_URL}/${manga.id}/${fileName}`;
-  return `${COVER_BASE_URL}/${manga.id}/${fileName}.${size}.jpg`;
-}
+const Layout = ({ children }: { children: React.ReactNode }) => {
+  const { toast } = useAppContext();
+  const location = useLocation();
+  const isReader = location.pathname.startsWith('/read');
 
-export function getTags(manga: Manga) {
-  if (!manga?.attributes?.tags) return [];
-  return manga.attributes.tags.map(t => t.attributes?.name?.en).filter(Boolean);
-}
+  return (
+    <div className="min-h-screen">
+      {!isReader && <Sidebar />}
+      {!isReader && <MobileNav />}
+      <main className={`${!isReader ? 'lg:ml-24' : ''} min-h-screen`}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+      
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-24 lg:bottom-12 left-1/2 px-6 py-3 bg-zinc-900 border border-primary/30 rounded-2xl text-[10px] font-black uppercase tracking-widest z-[1000] shadow-2xl text-white"
+          >
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
-export function getAuthorsAndArtists(manga: Manga) {
-  const authorRel = manga?.relationships?.find(r => r.type === 'author');
-  const artistRel = manga?.relationships?.find(r => r.type === 'artist') || authorRel;
-  const author = authorRel?.attributes?.name || 'Unknown Author';
-  const artist = artistRel?.attributes?.name || author;
-  return { author, artist };
-}
+const App: React.FC = () => {
+  return (
+    <AppProvider>
+      <Router>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/discover" element={<DiscoverPage />} />
+            <Route path="/search" element={<SearchPage />} />
+            <Route path="/library" element={<LibraryPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/manga/:id" element={<MangaDetailsPage />} />
+            <Route path="/read/:chapterId" element={<ReaderPage />} />
+          </Routes>
+        </Layout>
+      </Router>
+    </AppProvider>
+  );
+};
+
+export default App;
