@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #a855f7;
+  --color-secondary: #ec4899;
+  --color-dark: #09090b;
+  --color-surface: #18181b;
+  
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
+  
+  --font-plus-jakarta: "Plus Jakarta Sans", sans-serif;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --bg-dark: #09090b;
+  --primary: #a855f7;
+  --secondary: #ec4899;
+}
+
+body {
+  font-family: var(--font-plus-jakarta);
+  background-color: var(--bg-dark);
+  color: #fafafa;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.manga-card-gradient { background: linear-gradient(180deg, rgba(9,9,11,0) 0%, rgba(9,9,11,0.9) 100%); }
+.hero-alpha-gradient { background: linear-gradient(0deg, var(--bg-dark) 10%, rgba(9,9,11,0.2) 100%); }
+.header-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.glass-panel { background: rgba(24, 24, 27, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+
+/* Reader Widths */
+.reader-compact { max-width: 620px; }
+.reader-standard { max-width: 820px; }
+.reader-wide { max-width: 1000px; }
+.reader-full-width { max-width: 100%; }
+.reader-original { max-width: none; }
+
+.shimmer {
+  background: linear-gradient(90deg, #121214 25%, #1e1e21 50%, #121214 75%);
+  background-size: 200% 100%;
+  animation: shimmerEffect 1.5s infinite;
+}
+@keyframes shimmerEffect {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@layer utilities {
+  .reader-width-compact { --reader-max-width: 620px; }
+  .reader-width-standard { --reader-max-width: 820px; }
+  .reader-width-wide { --reader-max-width: 1000px; }
+  .reader-width-full { --reader-max-width: 100%; }
+  .reader-width-original { --reader-max-width: none; }
+}

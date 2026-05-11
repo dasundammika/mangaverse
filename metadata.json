@@ -1,0 +1,6 @@
+{
+  "name": "MangaVerse",
+  "description": "A modern, responsive manga reader powered by MangaDex API with dark mode, search, and intuitive reading modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
